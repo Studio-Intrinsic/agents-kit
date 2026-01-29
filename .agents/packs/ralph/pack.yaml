@@ -1,0 +1,16 @@
+id: ralph
+name: Ralph Pack
+version: 1.0.0
+description: Autonomous AI agent loop for PRD-driven development
+author: snarktank
+license: MIT
+repository: https://github.com/snarktank/ralph
+
+skills:
+  - ralph-converter
+  - prd-generator
+  - ralph-setup
+
+workflows: []
+
+dependencies: []

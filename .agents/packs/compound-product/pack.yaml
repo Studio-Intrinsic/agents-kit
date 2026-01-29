@@ -1,0 +1,16 @@
+id: compound-product
+name: Compound Product Pack
+version: 1.0.0
+description: Self-improving automation that analyzes reports, picks priorities, and autonomously implements fixes
+author: snarktank
+license: MIT
+repository: https://github.com/snarktank/compound-product
+
+skills:
+  - prd
+  - tasks
+  - compound-setup
+
+workflows: []
+
+dependencies: []
