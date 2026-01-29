@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# test - Run all tests for agents-kit
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[OK]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+
+# Tier 1: Schema validation
+run_tier1_tests() {
+    log_info "=== Tier 1: Schema Validation ==="
+
+    # Run lint
+    "$SCRIPT_DIR/lint"
+}
+
+# Tier 2: Render tests
+run_tier2_tests() {
+    log_info "=== Tier 2: Render Tests ==="
+
+    # Test that rendering works
+    "$SCRIPT_DIR/render" --runtime claude-code
+
+    # Check that expected files were generated
+    local expected_files=(
+        "build/claude-code/core/plan.md"
+        "build/claude-code/core/review.md"
+        "build/claude-code/core/workflow-plan.md"
+    )
+
+    for file in "${expected_files[@]}"; do
+        if [[ -f "$REPO_ROOT/$file" ]]; then
+            log_success "Generated: $file"
+        else
+            log_error "Missing: $file"
+            exit 1
+        fi
+    done
+
+    # Test codex rendering
+    "$SCRIPT_DIR/render" --runtime codex
+
+    if [[ -f "$REPO_ROOT/build/codex/core/plan.md" ]]; then
+        log_success "Codex rendering works"
+    else
+        log_error "Codex rendering failed"
+        exit 1
+    fi
+}
+
+# Tier 3: Content verification
+run_tier3_tests() {
+    log_info "=== Tier 3: Content Verification ==="
+
+    # Check that rendered content is valid markdown
+    for md_file in "$REPO_ROOT/build"/*/*/*; do
+        if [[ -f "$md_file" && "$md_file" == *.md ]]; then
+            # Simple check: ensure file is not empty and has headers
+            if [[ -s "$md_file" ]] && grep -q "^#" "$md_file"; then
+                log_success "Valid: $(basename "$md_file")"
+            else
+                log_error "Invalid: $md_file"
+                exit 1
+            fi
+        fi
+    done
+}
+
+# Run pack-specific tests
+run_pack_tests() {
+    log_info "=== Pack Tests ==="
+
+    for test_dir in "$REPO_ROOT/.agents/packs"/*/tests; do
+        if [[ -d "$test_dir" ]]; then
+            local pack_name
+            pack_name=$(basename "$(dirname "$test_dir")")
+            log_info "Running tests for pack: $pack_name"
+
+            # Look for test scripts
+            for test_script in "$test_dir"/*.sh; do
+                if [[ -f "$test_script" ]]; then
+                    log_info "Running $(basename "$test_script")"
+                    bash "$test_script"
+                fi
+            done
+        fi
+    done
+}
+
+# Main
+main() {
+    local tier=""
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --tier)
+                tier="$2"
+                shift 2
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
+    echo ""
+    log_info "Running agents-kit tests"
+    echo ""
+
+    case "$tier" in
+        1)
+            run_tier1_tests
+            ;;
+        2)
+            run_tier2_tests
+            ;;
+        3)
+            run_tier3_tests
+            ;;
+        "")
+            # Run all tiers
+            run_tier1_tests
+            echo ""
+            run_tier2_tests
+            echo ""
+            run_tier3_tests
+            echo ""
+            run_pack_tests
+            ;;
+        *)
+            log_error "Unknown tier: $tier"
+            exit 1
+            ;;
+    esac
+
+    echo ""
+    log_success "All tests passed!"
+}
+
+main "$@"

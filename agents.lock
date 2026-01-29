@@ -1,0 +1,11 @@
+# Auto-generated lock file
+schema_version: 1
+locked_at: 2026-01-29T04:00:51Z
+commit: HEAD
+unknown
+
+packs:
+  core:
+    version: 0.10.0
+    commit: HEAD
+unknown

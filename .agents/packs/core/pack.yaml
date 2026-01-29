@@ -1,0 +1,26 @@
+id: core
+name: Core Pack
+version: 0.10.0
+description: Essential workflows and skills for any team
+author: your-team
+
+skills:
+  - plan
+  - review
+  - summarize
+  - critique
+  - extract-structured
+  - write-prd
+  - code-review
+  - explain
+  - debug
+  - refactor
+
+workflows:
+  - plan
+  - work
+  - review
+  - compound
+  - triage
+
+dependencies: []

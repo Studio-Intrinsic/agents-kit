@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# render - Transform canonical skills to runtime-specific formats
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+BUILD_DIR="$REPO_ROOT/build"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[OK]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+
+# Parse frontmatter from markdown file
+parse_frontmatter() {
+    local file="$1"
+    local key="$2"
+
+    # Extract YAML frontmatter between --- markers
+    sed -n '/^---$/,/^---$/p' "$file" | grep "^$key:" | sed "s/^$key: *//"
+}
+
+# Render skill for Claude Code
+render_claude_code_skill() {
+    local skill_file="$1"
+    local output_dir="$2"
+
+    local skill_id
+    skill_id=$(parse_frontmatter "$skill_file" "id")
+    local skill_name
+    skill_name=$(parse_frontmatter "$skill_file" "name")
+
+    if [[ -z "$skill_id" ]]; then
+        log_error "No id found in $skill_file"
+        return 1
+    fi
+
+    local output_file="$output_dir/${skill_id}.md"
+
+    # For Claude Code, the format is very similar - mostly pass-through
+    # Just ensure it has the right structure
+
+    # Read the file
+    local content
+    content=$(cat "$skill_file")
+
+    # Write to output (Claude Code uses the same markdown format)
+    echo "$content" > "$output_file"
+
+    log_success "Rendered: $skill_id -> $output_file"
+}
+
+# Render skill for Codex/OpenAI
+render_codex_skill() {
+    local skill_file="$1"
+    local output_dir="$2"
+
+    local skill_id
+    skill_id=$(parse_frontmatter "$skill_file" "id")
+    local skill_name
+    skill_name=$(parse_frontmatter "$skill_file" "name")
+    local description
+    description=$(parse_frontmatter "$skill_file" "description")
+    local version
+    version=$(parse_frontmatter "$skill_file" "version")
+
+    if [[ -z "$skill_id" ]]; then
+        log_error "No id found in $skill_file"
+        return 1
+    fi
+
+    local output_file="$output_dir/${skill_id}.md"
+
+    # Extract body (everything after second ---)
+    local body
+    body=$(sed -n '/^---$/,/^---$/!p' "$skill_file" | tail -n +2)
+
+    # Transform to Codex format
+    cat > "$output_file" <<EOF
+# $skill_name
+
+Version: $version
+
+$description
+
+$body
+
+---
+*Rendered from agents-kit canonical format*
+EOF
+
+    # Remove Claude-specific references
+    sed -i.bak 's/Claude Code/the assistant/g' "$output_file"
+    sed -i.bak 's/Task tool/appropriate tools/g' "$output_file"
+    rm -f "$output_file.bak"
+
+    log_success "Rendered: $skill_id -> $output_file (codex)"
+}
+
+# Render workflow for a runtime
+render_workflow() {
+    local workflow_file="$1"
+    local output_dir="$2"
+    local runtime="$3"
+
+    local workflow_id
+    workflow_id=$(parse_frontmatter "$workflow_file" "id")
+    local workflow_name
+    workflow_name=$(parse_frontmatter "$workflow_file" "name")
+
+    if [[ -z "$workflow_id" ]]; then
+        log_error "No id found in $workflow_file"
+        return 1
+    fi
+
+    # Use the workflow id without the "workflow." prefix for filename
+    local filename
+    filename=$(echo "$workflow_id" | sed 's/^workflow\.//')
+    local output_file="$output_dir/workflow-${filename}.md"
+
+    # For now, workflows are mostly pass-through for both runtimes
+    cp "$workflow_file" "$output_file"
+
+    log_success "Rendered: $workflow_id -> $output_file"
+}
+
+# Main render function
+render_pack() {
+    local pack_dir="$1"
+    local runtime="$2"
+
+    local pack_name
+    pack_name=$(basename "$pack_dir")
+    local output_dir="$BUILD_DIR/$runtime/$pack_name"
+
+    mkdir -p "$output_dir"
+
+    log_info "Rendering pack: $pack_name for $runtime"
+
+    # Render skills
+    if [[ -d "$pack_dir/skills" ]]; then
+        for skill_dir in "$pack_dir/skills"/*; do
+            if [[ -d "$skill_dir" && -f "$skill_dir/skill.md" ]]; then
+                case $runtime in
+                    claude-code)
+                        render_claude_code_skill "$skill_dir/skill.md" "$output_dir"
+                        ;;
+                    codex)
+                        render_codex_skill "$skill_dir/skill.md" "$output_dir"
+                        ;;
+                esac
+            fi
+        done
+    fi
+
+    # Render workflows
+    if [[ -d "$pack_dir/workflows" ]]; then
+        for workflow_file in "$pack_dir/workflows"/*.md; do
+            if [[ -f "$workflow_file" ]]; then
+                render_workflow "$workflow_file" "$output_dir" "$runtime"
+            fi
+        done
+    fi
+}
+
+# Main
+main() {
+    local target_pack=""
+    local target_runtime=""
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --pack)
+                target_pack="$2"
+                shift 2
+                ;;
+            --runtime)
+                target_runtime="$2"
+                shift 2
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
+    # Determine runtimes to render
+    local runtimes=("claude-code" "codex")
+    if [[ -n "$target_runtime" ]]; then
+        runtimes=("$target_runtime")
+    fi
+
+    # Clean build directory
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR"
+
+    # Render each pack for each runtime
+    for runtime in "${runtimes[@]}"; do
+        mkdir -p "$BUILD_DIR/$runtime"
+
+        for pack_dir in "$REPO_ROOT/.agents/packs"/*; do
+            if [[ -d "$pack_dir" ]]; then
+                local pack_name
+                pack_name=$(basename "$pack_dir")
+
+                # Skip if specific pack requested and this isn't it
+                if [[ -n "$target_pack" && "$pack_name" != "$target_pack" ]]; then
+                    continue
+                fi
+
+                render_pack "$pack_dir" "$runtime"
+            fi
+        done
+    done
+
+    log_success "Rendering complete. Output in $BUILD_DIR"
+}
+
+main "$@"

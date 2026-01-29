@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# install - Install rendered skills to runtime tools
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+BUILD_DIR="$REPO_ROOT/build"
+AGENTS_HOME="${AGENTS_HOME:-$HOME/.agents}"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[OK]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+
+# Install to Claude Code
+install_claude_code() {
+    local use_symlinks="$1"
+    local source_dir="$BUILD_DIR/claude-code"
+    local target_dir="$HOME/.claude/skills"
+
+    if [[ ! -d "$source_dir" ]]; then
+        log_warn "No Claude Code build found. Run 'agents render' first."
+        return 1
+    fi
+
+    mkdir -p "$target_dir"
+
+    log_info "Installing to Claude Code ($target_dir)"
+
+    for pack_dir in "$source_dir"/*; do
+        if [[ -d "$pack_dir" ]]; then
+            local pack_name
+            pack_name=$(basename "$pack_dir")
+            local pack_target="$target_dir/$pack_name"
+
+            # Remove existing
+            rm -rf "$pack_target"
+
+            if [[ "$use_symlinks" == "true" ]]; then
+                ln -s "$pack_dir" "$pack_target"
+                log_success "Linked: $pack_name -> $pack_target"
+            else
+                cp -r "$pack_dir" "$pack_target"
+                log_success "Copied: $pack_name -> $pack_target"
+            fi
+        fi
+    done
+}
+
+# Install to Codex
+install_codex() {
+    local use_symlinks="$1"
+    local source_dir="$BUILD_DIR/codex"
+    local target_dir="$HOME/.codex/instructions"
+
+    if [[ ! -d "$source_dir" ]]; then
+        log_warn "No Codex build found. Run 'agents render' first."
+        return 1
+    fi
+
+    mkdir -p "$target_dir"
+
+    log_info "Installing to Codex ($target_dir)"
+
+    for pack_dir in "$source_dir"/*; do
+        if [[ -d "$pack_dir" ]]; then
+            local pack_name
+            pack_name=$(basename "$pack_dir")
+            local pack_target="$target_dir/$pack_name"
+
+            # Remove existing
+            rm -rf "$pack_target"
+
+            if [[ "$use_symlinks" == "true" ]]; then
+                ln -s "$pack_dir" "$pack_target"
+                log_success "Linked: $pack_name -> $pack_target"
+            else
+                cp -r "$pack_dir" "$pack_target"
+                log_success "Copied: $pack_name -> $pack_target"
+            fi
+        fi
+    done
+}
+
+# Main
+main() {
+    local target_runtime=""
+    local use_symlinks="false"
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --runtime)
+                target_runtime="$2"
+                shift 2
+                ;;
+            --link)
+                use_symlinks="true"
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
+    # Ensure build exists
+    if [[ ! -d "$BUILD_DIR" ]]; then
+        log_warn "Build directory not found. Running render first..."
+        "$SCRIPT_DIR/render"
+    fi
+
+    # Install to requested runtime(s)
+    if [[ -z "$target_runtime" || "$target_runtime" == "claude-code" ]]; then
+        install_claude_code "$use_symlinks"
+    fi
+
+    if [[ -z "$target_runtime" || "$target_runtime" == "codex" ]]; then
+        install_codex "$use_symlinks"
+    fi
+
+    log_success "Installation complete"
+
+    if [[ "$use_symlinks" == "true" ]]; then
+        log_info "Using symlinks - changes to source will reflect immediately"
+    fi
+}
+
+main "$@"
