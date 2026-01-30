@@ -1,29 +1,21 @@
 runtime: claude-code
+version: 1
 output_format: SKILL.md
-install_path: ~/.claude/skills/
+install_path: ~/.claude/skills/{pack}/{skill}/
 
 transforms:
-  # Skill transformation rules for Claude Code format
   frontmatter:
-    # Map canonical fields to Claude Code fields
-    - from: id
-      to: id
-    - from: name
-      to: name
-    - from: version
-      to: version
-    - from: description
-      to: description
-    - from: tags
-      to: tags
-    - from: tools
-      to: allowed-tools
+    - copy: [id, name, version, description, tags]
+    - rename:
+        from: tools
+        to: allowed-tools
 
   body:
-    # Copy body sections as-is
     - copy: true
 
-  # Add default allowed tools if not specified
+  filename:
+    - template: "SKILL.md"
+
   defaults:
     allowed-tools:
       - Read
@@ -33,18 +25,3 @@ transforms:
       - Write
       - Bash
       - Task
-
-# Workflow transformation
-workflow_transforms:
-  # Workflows become skills with workflow-specific metadata
-  frontmatter:
-    - from: id
-      to: id
-    - from: name
-      to: name
-    - from: version
-      to: version
-    - from: description
-      to: description
-    - from: triggers
-      to: triggers
