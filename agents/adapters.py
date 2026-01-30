@@ -54,90 +54,37 @@ def parse_skill_frontmatter(skill_path: Path) -> tuple[dict[str, Any], str]:
     return frontmatter, body
 
 
-def apply_frontmatter_transforms(
+def transform_frontmatter(
     frontmatter: dict[str, Any],
-    transforms: list[dict[str, Any]],
+    config: dict[str, Any],
 ) -> dict[str, Any]:
-    """Apply transformation operations to frontmatter.
-
-    Supported operations:
-    - copy: Copy field(s) as-is. Can be a single field or list of fields.
-    - rename: Rename a field. Format: {from: old_name, to: new_name}
-    - omit: Remove field(s). Can be a single field or list of fields.
+    """Transform frontmatter: copy all → rename → omit → defaults.
 
     Args:
         frontmatter: Original frontmatter dict
-        transforms: List of transform operations
+        config: Frontmatter config with rename, omit, defaults keys
 
     Returns:
         Transformed frontmatter dict
     """
-    result = {}
+    # Start with all fields
+    result = frontmatter.copy()
 
-    for op in transforms:
-        if "copy" in op:
-            fields = op["copy"]
-            if isinstance(fields, str):
-                fields = [fields]
-            for field in fields:
-                if field in frontmatter:
-                    result[field] = frontmatter[field]
+    # Apply renames
+    for old, new in config.get("rename", {}).items():
+        if old in result:
+            result[new] = result.pop(old)
 
-        elif "rename" in op:
-            rename = op["rename"]
-            from_field = rename.get("from")
-            to_field = rename.get("to")
-            if from_field and to_field and from_field in frontmatter:
-                result[to_field] = frontmatter[from_field]
+    # Remove omitted fields
+    for field in config.get("omit", []):
+        result.pop(field, None)
 
-        elif "omit" in op:
-            # Omit removes fields from result
-            fields = op["omit"]
-            if isinstance(fields, str):
-                fields = [fields]
-            for field in fields:
-                result.pop(field, None)
+    # Apply defaults for missing fields
+    for field, value in config.get("defaults", {}).items():
+        if field not in result:
+            result[field] = value
 
     return result
-
-
-def apply_body_transforms(body: str, transforms: list[dict[str, Any]]) -> str:
-    """Apply transformation operations to body.
-
-    Supported operations:
-    - copy: If true, copy body as-is
-
-    Args:
-        body: Original body string
-        transforms: List of transform operations
-
-    Returns:
-        Transformed body string
-    """
-    for op in transforms:
-        if op.get("copy") is True:
-            return body
-    return body
-
-
-def get_output_filename(
-    skill_name: str,
-    transforms: list[dict[str, Any]],
-) -> str:
-    """Determine output filename based on transforms.
-
-    Args:
-        skill_name: Name of the skill
-        transforms: Filename transform operations
-
-    Returns:
-        Output filename
-    """
-    for op in transforms:
-        if "template" in op:
-            template = op["template"]
-            return template.replace("{skill}", skill_name)
-    return "skill.md"
 
 
 def transform_skill(skill_path: Path, adapter: dict[str, Any]) -> str:
@@ -151,30 +98,19 @@ def transform_skill(skill_path: Path, adapter: dict[str, Any]) -> str:
         Transformed skill content
     """
     frontmatter, body = parse_skill_frontmatter(skill_path)
-    transforms = adapter.get("transforms", {})
 
-    # Transform frontmatter
-    fm_transforms = transforms.get("frontmatter", [])
-    new_frontmatter = apply_frontmatter_transforms(frontmatter, fm_transforms)
-
-    # Apply defaults if specified
-    defaults = transforms.get("defaults", {})
-    for key, value in defaults.items():
-        if key not in new_frontmatter:
-            new_frontmatter[key] = value
-
-    # Transform body
-    body_transforms = transforms.get("body", [])
-    new_body = apply_body_transforms(body, body_transforms)
+    # Transform frontmatter using simplified config
+    fm_config = adapter.get("frontmatter", {})
+    new_frontmatter = transform_frontmatter(frontmatter, fm_config)
 
     # Reconstruct skill.md
     if new_frontmatter:
         frontmatter_str = yaml.dump(
             new_frontmatter, default_flow_style=False, sort_keys=False
         )
-        return f"---\n{frontmatter_str}---\n{new_body}"
+        return f"---\n{frontmatter_str}---\n{body}"
     else:
-        return new_body
+        return body
 
 
 def get_skills_in_pack(pack_name: str) -> list[Path]:
@@ -215,8 +151,7 @@ def render_all_skills(adapter: dict[str, Any], packs: list[str]) -> int:
     """
     runtime = adapter.get("runtime", "unknown")
     build_dir = get_build_dir() / runtime
-    transforms = adapter.get("transforms", {})
-    filename_transforms = transforms.get("filename", [])
+    output_filename = adapter.get("filename", "skill.md")
 
     # Clean and recreate build directory for this runtime
     if build_dir.exists():
@@ -228,7 +163,6 @@ def render_all_skills(adapter: dict[str, Any], packs: list[str]) -> int:
         skills = get_skills_in_pack(pack_name)
         for skill_path in skills:
             skill_name = skill_path.parent.name
-            output_filename = get_output_filename(skill_name, filename_transforms)
 
             # Create output directory
             output_dir = build_dir / pack_name / skill_name
@@ -275,8 +209,9 @@ def install_to_runtime(adapter: dict[str, Any]) -> int:
 
             # Expand install path template
             install_path = (
-                install_path_template.replace("{pack}", pack_name)
-                .replace("{skill}", skill_name)
+                install_path_template.replace("{pack}", pack_name).replace(
+                    "{skill}", skill_name
+                )
             )
             install_path = Path(install_path).expanduser()
 

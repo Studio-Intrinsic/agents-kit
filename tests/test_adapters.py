@@ -1,15 +1,12 @@
 """Tests for the adapter transform engine."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from agents.adapters import (
-    apply_body_transforms,
-    apply_frontmatter_transforms,
-    get_output_filename,
     parse_skill_frontmatter,
+    transform_frontmatter,
     transform_skill,
 )
 
@@ -49,145 +46,101 @@ This is the body.
         assert "# Just a heading" in body
 
 
-class TestApplyFrontmatterTransforms:
-    """Tests for apply_frontmatter_transforms."""
-
-    def test_copy_single_field(self):
-        """Test copying a single field."""
-        frontmatter = {"id": "test", "name": "Test", "extra": "ignore"}
-        transforms = [{"copy": "id"}]
-
-        result = apply_frontmatter_transforms(frontmatter, transforms)
-
-        assert result == {"id": "test"}
-
-    def test_copy_multiple_fields(self):
-        """Test copying multiple fields."""
-        frontmatter = {"id": "test", "name": "Test", "version": "1.0.0"}
-        transforms = [{"copy": ["id", "name", "version"]}]
-
-        result = apply_frontmatter_transforms(frontmatter, transforms)
-
-        assert result == {"id": "test", "name": "Test", "version": "1.0.0"}
-
-    def test_copy_missing_field(self):
-        """Test copying a field that doesn't exist."""
-        frontmatter = {"id": "test"}
-        transforms = [{"copy": ["id", "missing"]}]
-
-        result = apply_frontmatter_transforms(frontmatter, transforms)
-
-        assert result == {"id": "test"}
+class TestTransformFrontmatter:
+    """Tests for transform_frontmatter."""
 
     def test_rename_field(self):
         """Test renaming a field."""
-        frontmatter = {"tools": ["Read", "Write"]}
-        transforms = [{"rename": {"from": "tools", "to": "allowed-tools"}}]
+        frontmatter = {"tools": ["Read", "Write"], "id": "test"}
+        config = {"rename": {"tools": "allowed-tools"}}
 
-        result = apply_frontmatter_transforms(frontmatter, transforms)
+        result = transform_frontmatter(frontmatter, config)
 
-        assert result == {"allowed-tools": ["Read", "Write"]}
+        assert result == {"allowed-tools": ["Read", "Write"], "id": "test"}
 
     def test_rename_missing_field(self):
         """Test renaming a field that doesn't exist."""
         frontmatter = {"id": "test"}
-        transforms = [{"rename": {"from": "tools", "to": "allowed-tools"}}]
+        config = {"rename": {"tools": "allowed-tools"}}
 
-        result = apply_frontmatter_transforms(frontmatter, transforms)
-
-        assert result == {}
-
-    def test_omit_field(self):
-        """Test omitting fields."""
-        frontmatter = {"id": "test", "name": "Test"}
-        transforms = [
-            {"copy": ["id", "name"]},
-            {"omit": "name"},
-        ]
-
-        result = apply_frontmatter_transforms(frontmatter, transforms)
+        result = transform_frontmatter(frontmatter, config)
 
         assert result == {"id": "test"}
 
+    def test_omit_fields(self):
+        """Test omitting fields."""
+        frontmatter = {"id": "test", "name": "Test", "constraints": "remove me"}
+        config = {"omit": ["constraints"]}
+
+        result = transform_frontmatter(frontmatter, config)
+
+        assert result == {"id": "test", "name": "Test"}
+
+    def test_omit_multiple_fields(self):
+        """Test omitting multiple fields."""
+        frontmatter = {"id": "test", "tools": [], "constraints": []}
+        config = {"omit": ["tools", "constraints"]}
+
+        result = transform_frontmatter(frontmatter, config)
+
+        assert result == {"id": "test"}
+
+    def test_defaults_applied(self):
+        """Test defaults are applied for missing fields."""
+        frontmatter = {"id": "test"}
+        config = {"defaults": {"allowed-tools": ["Read", "Write"]}}
+
+        result = transform_frontmatter(frontmatter, config)
+
+        assert result == {"id": "test", "allowed-tools": ["Read", "Write"]}
+
+    def test_defaults_not_overwrite(self):
+        """Test defaults don't overwrite existing fields."""
+        frontmatter = {"id": "test", "allowed-tools": ["Bash"]}
+        config = {"defaults": {"allowed-tools": ["Read", "Write"]}}
+
+        result = transform_frontmatter(frontmatter, config)
+
+        assert result == {"id": "test", "allowed-tools": ["Bash"]}
+
     def test_combined_transforms(self):
-        """Test combining copy and rename."""
+        """Test rename → omit → defaults in order."""
         frontmatter = {
             "id": "test",
-            "name": "Test Skill",
-            "version": "1.0.0",
             "tools": ["Read"],
-            "extra": "ignored",
+            "constraints": "internal",
+            "extra": "keep",
         }
-        transforms = [
-            {"copy": ["id", "name", "version"]},
-            {"rename": {"from": "tools", "to": "allowed-tools"}},
-        ]
+        config = {
+            "rename": {"tools": "allowed-tools"},
+            "omit": ["constraints"],
+            "defaults": {"version": "1.0.0"},
+        }
 
-        result = apply_frontmatter_transforms(frontmatter, transforms)
+        result = transform_frontmatter(frontmatter, config)
 
         assert result == {
             "id": "test",
-            "name": "Test Skill",
-            "version": "1.0.0",
             "allowed-tools": ["Read"],
+            "extra": "keep",
+            "version": "1.0.0",
         }
 
+    def test_empty_config(self):
+        """Test with empty config passes through all fields."""
+        frontmatter = {"id": "test", "name": "Test"}
+        config = {}
 
-class TestApplyBodyTransforms:
-    """Tests for apply_body_transforms."""
+        result = transform_frontmatter(frontmatter, config)
 
-    def test_copy_body(self):
-        """Test copying body as-is."""
-        body = "# Heading\n\nSome content."
-        transforms = [{"copy": True}]
-
-        result = apply_body_transforms(body, transforms)
-
-        assert result == body
-
-    def test_no_copy(self):
-        """Test when copy is not true."""
-        body = "# Heading\n\nSome content."
-        transforms = [{"copy": False}]
-
-        result = apply_body_transforms(body, transforms)
-
-        assert result == body  # Falls through
-
-
-class TestGetOutputFilename:
-    """Tests for get_output_filename."""
-
-    def test_template_filename(self):
-        """Test filename from template."""
-        transforms = [{"template": "SKILL.md"}]
-
-        result = get_output_filename("my-skill", transforms)
-
-        assert result == "SKILL.md"
-
-    def test_template_with_skill_var(self):
-        """Test filename template with {skill} variable."""
-        transforms = [{"template": "{skill}.md"}]
-
-        result = get_output_filename("my-skill", transforms)
-
-        assert result == "my-skill.md"
-
-    def test_default_filename(self):
-        """Test default filename when no template."""
-        transforms = []
-
-        result = get_output_filename("my-skill", transforms)
-
-        assert result == "skill.md"
+        assert result == {"id": "test", "name": "Test"}
 
 
 class TestTransformSkill:
     """Tests for transform_skill."""
 
-    def test_full_transform(self, tmp_path: Path):
-        """Test a complete skill transformation."""
+    def test_claude_code_adapter(self, tmp_path: Path):
+        """Test transformation with Claude Code adapter format."""
         skill_file = tmp_path / "skill.md"
         skill_file.write_text("""---
 id: test-skill
@@ -207,16 +160,11 @@ Test the transform engine.
 """)
 
         adapter = {
-            "runtime": "test-runtime",
-            "transforms": {
-                "frontmatter": [
-                    {"copy": ["id", "name", "version", "description"]},
-                    {"rename": {"from": "tools", "to": "allowed-tools"}},
-                ],
-                "body": [{"copy": True}],
-                "defaults": {
-                    "allowed-tools": ["Glob"],
-                },
+            "runtime": "claude-code",
+            "filename": "SKILL.md",
+            "frontmatter": {
+                "rename": {"tools": "allowed-tools"},
+                "defaults": {"allowed-tools": ["Glob"]},
             },
         }
 
@@ -228,19 +176,50 @@ Test the transform engine.
         assert "allowed-tools:" in result
         assert "- Read" in result
         assert "- Write" in result
+        # Check 'tools:' was renamed (not just present as substring of 'allowed-tools:')
+        assert "\ntools:" not in result
 
         # Check body was preserved
         assert "# Test Skill" in result
         assert "## Intent" in result
 
-    def test_defaults_applied(self, tmp_path: Path):
-        """Test that defaults are applied when field is missing."""
+    def test_codex_adapter(self, tmp_path: Path):
+        """Test transformation with Codex adapter format."""
         skill_file = tmp_path / "skill.md"
         skill_file.write_text("""---
 id: test-skill
 name: Test Skill
 version: 1.0.0
-description: No tools defined.
+tools:
+  - Read
+constraints: internal
+---
+
+# Test Skill
+""")
+
+        adapter = {
+            "runtime": "codex",
+            "filename": "instructions.md",
+            "frontmatter": {
+                "omit": ["tools", "constraints"],
+            },
+        }
+
+        result = transform_skill(skill_file, adapter)
+
+        assert "id: test-skill" in result
+        assert "name: Test Skill" in result
+        assert "tools:" not in result
+        assert "constraints" not in result
+        assert "# Test Skill" in result
+
+    def test_defaults_applied_when_missing(self, tmp_path: Path):
+        """Test that defaults are applied when field is missing."""
+        skill_file = tmp_path / "skill.md"
+        skill_file.write_text("""---
+id: test-skill
+name: Test Skill
 ---
 
 # Test Skill
@@ -248,14 +227,8 @@ description: No tools defined.
 
         adapter = {
             "runtime": "test-runtime",
-            "transforms": {
-                "frontmatter": [
-                    {"copy": ["id", "name", "version", "description"]},
-                ],
-                "body": [{"copy": True}],
-                "defaults": {
-                    "allowed-tools": ["Read", "Write"],
-                },
+            "frontmatter": {
+                "defaults": {"allowed-tools": ["Read", "Write"]},
             },
         }
 
@@ -264,3 +237,22 @@ description: No tools defined.
         assert "allowed-tools:" in result
         assert "- Read" in result
         assert "- Write" in result
+
+    def test_no_frontmatter_config(self, tmp_path: Path):
+        """Test with no frontmatter config passes through unchanged."""
+        skill_file = tmp_path / "skill.md"
+        skill_file.write_text("""---
+id: test-skill
+name: Test Skill
+---
+
+# Body
+""")
+
+        adapter = {"runtime": "test", "filename": "skill.md"}
+
+        result = transform_skill(skill_file, adapter)
+
+        assert "id: test-skill" in result
+        assert "name: Test Skill" in result
+        assert "# Body" in result

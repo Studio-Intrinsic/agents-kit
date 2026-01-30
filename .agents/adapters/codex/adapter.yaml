@@ -1,15 +1,8 @@
 runtime: codex
 version: 1
-output_format: instructions.md
+
+filename: instructions.md
 install_path: ~/.codex/instructions/{pack}/{skill}/
 
-transforms:
-  frontmatter:
-    - copy: [id, name, version, description]
-    - omit: [tools, constraints]
-
-  body:
-    - copy: true
-
-  filename:
-    - template: "instructions.md"
+frontmatter:
+  omit: [tools, constraints]

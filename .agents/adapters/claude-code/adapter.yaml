@@ -1,21 +1,12 @@
 runtime: claude-code
 version: 1
-output_format: SKILL.md
+
+filename: SKILL.md
 install_path: ~/.claude/skills/{pack}/{skill}/
 
-transforms:
-  frontmatter:
-    - copy: [id, name, version, description, tags]
-    - rename:
-        from: tools
-        to: allowed-tools
-
-  body:
-    - copy: true
-
-  filename:
-    - template: "SKILL.md"
-
+frontmatter:
+  rename:
+    tools: allowed-tools
   defaults:
     allowed-tools:
       - Read

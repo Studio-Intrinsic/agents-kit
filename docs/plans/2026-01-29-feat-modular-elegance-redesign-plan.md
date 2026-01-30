@@ -137,43 +137,62 @@ packs:
 
 **Objective:** Build the adapter system in a single file.
 
-**File:** `agents/adapters.py` (~200 lines)
+**File:** `agents/adapters.py` (~80 lines)
 
-**Transform Operations (keep minimal):**
+**Simplified Adapter Schema:**
 
-| Operation | Description | Example |
-|-----------|-------------|---------|
-| `copy` | Copy field(s) as-is | `- copy: [id, name, version]` |
-| `rename` | Rename field | `- rename: {from: inputs, to: parameters}` |
-| `omit` | Exclude fields | `- omit: [constraints]` |
-| `template` | Apply template to filename | `- template: "SKILL.md"` |
+Adapters use a flat configuration instead of a transform DSL. Processing order: copy all → rename → omit → defaults.
 
-**Note:** Start with these 4 operations. Add `flatten`, `strip_patterns` only when a runtime actually needs them.
+| Key | Description | Example |
+|-----|-------------|---------|
+| `runtime` | Runtime identifier | `claude-code` |
+| `filename` | Output filename | `SKILL.md` |
+| `install_path` | Install location template | `~/.claude/skills/{pack}/{skill}/` |
+| `frontmatter.rename` | Field renames (dict) | `{tools: allowed-tools}` |
+| `frontmatter.omit` | Fields to remove (list) | `[constraints]` |
+| `frontmatter.defaults` | Default values for missing fields | `{allowed-tools: [Read, Write]}` |
 
-**adapter.yaml format (use existing):**
+**adapter.yaml format:**
 ```yaml
 # .agents/adapters/claude-code/adapter.yaml
 runtime: claude-code
 version: 1
-output_format: skill.md
+
+filename: SKILL.md
 install_path: ~/.claude/skills/{pack}/{skill}/
 
-transforms:
-  frontmatter:
-    - copy: [id, name, version, description, tags]
-    - rename: {from: tools, to: allowed-tools}
-  body:
-    - copy: true
-  filename:
-    - template: "SKILL.md"
+frontmatter:
+  rename:
+    tools: allowed-tools
+  defaults:
+    allowed-tools:
+      - Read
+      - Glob
+      - Grep
+      - Edit
+      - Write
+      - Bash
+      - Task
+```
+
+```yaml
+# .agents/adapters/codex/adapter.yaml
+runtime: codex
+version: 1
+
+filename: instructions.md
+install_path: ~/.codex/instructions/{pack}/{skill}/
+
+frontmatter:
+  omit: [tools, constraints]
 ```
 
 **Tasks:**
 - [x] Create `agents/adapters.py` with:
   - `load_adapter(runtime: str) -> dict`
   - `transform_skill(skill_path: Path, adapter: dict) -> str`
-  - `apply_operation(op: dict, content: dict) -> dict`
-- [x] Update existing adapters in `.agents/adapters/` if needed
+  - `transform_frontmatter(frontmatter: dict, config: dict) -> dict`
+- [x] Update existing adapters in `.agents/adapters/` to simplified schema
 - [x] Write tests in `tests/test_adapters.py`
 
 ---
