@@ -1,56 +1,8 @@
 runtime: codex
-output_format: instructions.md
-install_path: ~/.codex/instructions/
+version: 1
 
-transforms:
-  # Codex/OpenAI instructions format transformation
-  frontmatter:
-    # Flatten frontmatter into prose header
-    flatten: true
-    template: |
-      # {name}
+filename: instructions.md
+install_path: ~/.codex/instructions/{pack}/{skill}/
 
-      Version: {version}
-
-      {description}
-
-  body:
-    # Transform sections for OpenAI instruction-following patterns
-    - section: constraints
-      transform: |
-        ## Rules
-        You must follow these rules:
-        {constraints_as_bullets}
-
-    - section: procedure
-      transform: |
-        ## Steps
-        Follow these steps in order:
-        {procedure_content}
-
-    - section: examples
-      transform: |
-        ## Examples
-        {examples_content}
-
-  # Strip Claude-specific references
-  strip_patterns:
-    - "Claude Code"
-    - "Task tool"
-    - "allowed-tools"
-
-# Workflow transformation for Codex
-workflow_transforms:
-  frontmatter:
-    flatten: true
-    template: |
-      # {name} Workflow
-
-      {description}
-
-      Triggers: {triggers_as_list}
-
-  body:
-    # Convert phases to numbered sections
-    - section: phases
-      transform: numbered_sections
+frontmatter:
+  omit: [tools, constraints]
