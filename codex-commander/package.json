@@ -1,0 +1,25 @@
+{
+  "name": "codex-commander",
+  "version": "0.1.0",
+  "description": "TUI wrapper for Codex CLI with slash command picker",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "codex-commander": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81",
+    "gray-matter": "^4.0.3",
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/blessed": "^0.1.25",
+    "@types/node": "^20.0.0",
+    "bun-types": "latest",
+    "typescript": "^5.0.0"
+  }
+}
