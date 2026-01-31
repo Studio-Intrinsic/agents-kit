@@ -28,7 +28,7 @@ def get_default_config() -> dict[str, Any]:
     return {
         "version": 1,
         "runtimes": ["claude-code"],
-        "packs": ["core"],
+        "packs": ["ak-core"],
     }
 
 

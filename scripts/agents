@@ -202,7 +202,7 @@ cmd_new() {
 
     case $type in
         skill)
-            local skill_dir="$REPO_ROOT/.agents/packs/core/skills/$name"
+            local skill_dir="$REPO_ROOT/.agents/packs/ak-core/skills/$name"
             mkdir -p "$skill_dir"
 
             cat > "$skill_dir/skill.md" <<EOF

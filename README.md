@@ -23,21 +23,21 @@ Meanwhile, each AI runtime (Claude Code, Codex, Cursor, etc.) has its own format
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Canonical Source                        │
-│  .agents/packs/core/skills/plan/skill.md                   │
+│  .agents/packs/ak-core/skills/plan/skill.md                │
 └─────────────────────┬───────────────────────────────────────┘
                       │ agents render
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    Build Artifacts                          │
-│  build/claude-code/core/plan.md                            │
-│  build/codex/core/plan.md                                  │
+│  build/claude-code/ak-core/plan.md                         │
+│  build/codex/ak-core/plan.md                               │
 └─────────────────────┬───────────────────────────────────────┘
                       │ agents install
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   Runtime Locations                         │
-│  ~/.claude/skills/core/plan.md                             │
-│  ~/.codex/instructions/core/plan.md                        │
+│  ~/.claude/skills/ak-core/plan.md                          │
+│  ~/.codex/instructions/ak-core/plan.md                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -127,7 +127,7 @@ cd agents-kit
 agents-kit/
 ├── .agents/
 │   ├── packs/                    # Skill packs
-│   │   ├── core/                 # Essential skills for any team
+│   │   ├── ak-core/              # Essential skills for any team
 │   │   │   ├── pack.yaml         # Pack metadata
 │   │   │   ├── skills/           # Individual skills
 │   │   │   │   ├── plan/
@@ -217,7 +217,7 @@ See [docs/authoring-guide.md](docs/authoring-guide.md) for complete documentatio
 
 ---
 
-## Core Pack (v0.10.0)
+## ak-core Pack (v0.10.0)
 
 ### Skills
 
@@ -255,7 +255,7 @@ agents init --from <git-url>         # Clone repo + configure
 
 # Rendering
 agents render                        # Render all packs for all runtimes
-agents render --pack core            # Render specific pack
+agents render --pack ak-core         # Render specific pack
 agents render --runtime claude-code  # Render for specific runtime
 
 # Installation
@@ -338,7 +338,7 @@ locked_at: 2026-01-28T12:00:00Z
 commit: abc123def456
 
 packs:
-  core:
+  ak-core:
     version: 0.10.0
     commit: abc123
 ```
@@ -356,7 +356,7 @@ Regenerate with `agents lock` after updates.
 agents new skill my-skill
 
 # Edit the skill
-# .agents/packs/core/skills/my-skill/skill.md
+# .agents/packs/ak-core/skills/my-skill/skill.md
 
 # Validate
 agents validate
@@ -378,7 +378,7 @@ All skills must:
 - [ ] Include at least one example
 - [ ] Render for all target runtimes
 
-Core pack skills additionally require:
+ak-core pack skills additionally require:
 - [ ] Comprehensive examples
 - [ ] Failure Modes section
 - [ ] Two reviewer approvals
