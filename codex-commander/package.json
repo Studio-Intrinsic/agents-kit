@@ -9,7 +9,8 @@
   },
   "scripts": {
     "dev": "bun run src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "npm rebuild node-pty || true"
   },
   "dependencies": {
     "blessed": "^0.1.81",
