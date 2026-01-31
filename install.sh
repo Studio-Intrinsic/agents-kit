@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One-line install script for agents-kit
-# curl -fsSL https://your-domain/install.sh | sh
+# agents-kit installer
+#
+# PUBLIC REPO (default):
+#   curl -fsSL https://raw.githubusercontent.com/Studio-Intrinsic/agents-kit/main/install.sh | sh
+#
+# PRIVATE FORK:
+#   gh repo clone your-org/agents-kit ~/.agents/repos/agents-kit && ~/.agents/repos/agents-kit/install.sh
+#
+# Or set AGENTS_REPO_URL:
+#   AGENTS_REPO_URL=git@github.com:your-org/agents-kit.git ./install.sh
 
 AGENTS_HOME="${AGENTS_HOME:-$HOME/.agents}"
 REPO_URL="${AGENTS_REPO_URL:-https://github.com/Studio-Intrinsic/agents-kit.git}"
@@ -46,10 +54,24 @@ main() {
     log_info "Creating directory structure..."
     mkdir -p "$AGENTS_HOME"/{config,repos,build/{claude-code,codex},bin}
 
+    # Detect if running from a cloned repo (for private forks)
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
     # Clone or update repo
     local repo_dir="$AGENTS_HOME/repos/agents-kit"
 
-    if [[ -d "$repo_dir" ]]; then
+    # If running from a git repo that isn't the installed location, copy it
+    if [[ -d "$script_dir/.git" ]] && [[ "$script_dir" != "$repo_dir" ]]; then
+        log_info "Installing from local clone: $script_dir"
+        if [[ -d "$repo_dir" ]]; then
+            rm -rf "$repo_dir"
+        fi
+        cp -r "$script_dir" "$repo_dir"
+        # Get the remote URL for config
+        REPO_URL=$(git -C "$repo_dir" remote get-url origin 2>/dev/null || echo "$REPO_URL")
+        log_success "Copied to $repo_dir"
+    elif [[ -d "$repo_dir" ]]; then
         log_info "Updating existing installation..."
         git -C "$repo_dir" pull --ff-only || {
             log_warn "Could not update. Using existing version."
@@ -57,11 +79,31 @@ main() {
     else
         log_info "Cloning agents-kit..."
 
-        # Try to clone (will prompt for auth if private)
-        if ! git clone "$REPO_URL" "$repo_dir"; then
-            log_error "Failed to clone repository"
-            log_info "If this is a private repo, ensure you have access"
-            exit 1
+        # Prefer gh CLI for better auth handling (especially private repos)
+        if command -v gh &> /dev/null && [[ "$REPO_URL" == *"github.com"* ]]; then
+            # Extract org/repo from URL
+            local repo_slug
+            repo_slug=$(echo "$REPO_URL" | sed -E 's|.*github.com[:/]||' | sed 's|\.git$||')
+
+            if gh repo clone "$repo_slug" "$repo_dir" 2>/dev/null; then
+                log_success "Cloned via GitHub CLI"
+            else
+                log_warn "gh clone failed, falling back to git..."
+                if ! git clone "$REPO_URL" "$repo_dir"; then
+                    log_error "Failed to clone repository"
+                    log_info "For private repos, try: gh auth login"
+                    exit 1
+                fi
+            fi
+        else
+            if ! git clone "$REPO_URL" "$repo_dir"; then
+                log_error "Failed to clone repository"
+                log_info "For private repos:"
+                log_info "  1. Install GitHub CLI: brew install gh"
+                log_info "  2. Authenticate: gh auth login"
+                log_info "  3. Re-run this installer"
+                exit 1
+            fi
         fi
     fi
 

@@ -68,6 +68,27 @@ This will:
 4. Install to Claude Code and Codex
 5. Add `agents` CLI to your path
 
+### Private Fork for Your Team
+
+Fork the repo and make it private for your organization:
+
+```bash
+# 1. Fork on GitHub, then make it private in repo settings
+
+# 2. Team members install via GitHub CLI (handles auth automatically)
+gh repo clone your-org/agents-kit ~/.agents/repos/agents-kit
+~/.agents/repos/agents-kit/install.sh
+
+# Or as a one-liner:
+gh repo clone your-org/agents-kit ~/.agents/repos/agents-kit && ~/.agents/repos/agents-kit/install.sh
+```
+
+Alternatively, set `AGENTS_REPO_URL` for SSH-based installs:
+
+```bash
+AGENTS_REPO_URL=git@github.com:your-org/agents-kit.git ./install.sh
+```
+
 ### Manual Installation
 
 ```bash
