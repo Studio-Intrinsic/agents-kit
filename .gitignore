@@ -24,3 +24,5 @@ Thumbs.db
 
 # Local testing
 .local/
+uv.lock
+.venv/
