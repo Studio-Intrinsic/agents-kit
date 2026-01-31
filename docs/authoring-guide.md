@@ -9,7 +9,7 @@ This guide covers how to create and maintain skills for the agents-kit library.
 agents new skill my-skill
 
 # Edit the generated file
-# .agents/packs/core/skills/my-skill/skill.md
+# .agents/packs/ak-core/skills/my-skill/skill.md
 
 # Validate your changes
 agents validate
@@ -204,7 +204,7 @@ workflows:
   - workflow-1
 
 dependencies:
-  - core  # Other packs this depends on
+  - ak-core  # Other packs this depends on
 ```
 
 ## Best Practices
