@@ -17,6 +17,12 @@ def find_agents_root() -> Path | None:
     return None
 
 
+def get_global_agents_home() -> Path | None:
+    """Get ~/.agents if it exists."""
+    global_dir = Path.home() / ".agents"
+    return global_dir if global_dir.is_dir() else None
+
+
 def get_default_config() -> dict[str, Any]:
     """Return default configuration."""
     return {
@@ -52,11 +58,18 @@ def load_config() -> dict[str, Any]:
 
 
 def get_agents_home() -> Path:
-    """Get the .agents directory path."""
+    """Get .agents directory - local first, then global fallback."""
+    # Local takes precedence
     root = find_agents_root()
     if root:
         return root / ".agents"
-    # Fall back to current directory
+
+    # Fall back to global
+    global_home = get_global_agents_home()
+    if global_home:
+        return global_home
+
+    # Last resort: current directory
     return Path.cwd() / ".agents"
 
 
