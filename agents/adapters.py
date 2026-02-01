@@ -2,12 +2,21 @@
 
 import re
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from agents.config import get_adapters_dir, get_build_dir, get_packs_dir
+from agents.manifest import (
+    InstallResult,
+    check_file_modified,
+    hash_file,
+    load_manifest,
+    save_manifest,
+    set_installed_entry,
+)
 
 
 def load_adapter(runtime: str) -> dict[str, Any]:
@@ -177,26 +186,36 @@ def render_all_skills(adapter: dict[str, Any], packs: list[str]) -> int:
     return count
 
 
-def install_to_runtime(adapter: dict[str, Any]) -> int:
+def install_to_runtime(
+    adapter: dict[str, Any],
+    force: bool = False,
+    backup: bool = False,
+    dry_run: bool = False,
+) -> InstallResult:
     """Install rendered skills to runtime install path.
 
     Args:
         adapter: Adapter configuration
+        force: If True, overwrite modified files without prompting
+        backup: If True, create backups of modified files before overwriting
+        dry_run: If True, don't actually install, just report what would happen
 
     Returns:
-        Number of skills installed
+        InstallResult with details of what was installed/skipped
     """
     runtime = adapter.get("runtime", "unknown")
     install_path_template = adapter.get("install_path", "")
+    result = InstallResult()
 
     if not install_path_template:
-        return 0
+        return result
 
     build_dir = get_build_dir() / runtime
     if not build_dir.exists():
-        return 0
+        return result
 
-    count = 0
+    manifest = load_manifest()
+
     for pack_dir in build_dir.iterdir():
         if not pack_dir.is_dir():
             continue
@@ -215,11 +234,53 @@ def install_to_runtime(adapter: dict[str, Any]) -> int:
             )
             install_path = Path(install_path).expanduser()
 
-            # Create install directory and copy files
-            install_path.mkdir(parents=True, exist_ok=True)
-            for file in skill_dir.iterdir():
-                if file.is_file():
-                    shutil.copy2(file, install_path / file.name)
-                    count += 1
+            # Process each file in the skill directory
+            for source_file in skill_dir.iterdir():
+                if not source_file.is_file():
+                    continue
 
-    return count
+                dest_file = install_path / source_file.name
+                manifest_key = f"{pack_name}/{skill_name}/{source_file.name}"
+
+                # Check if file was modified by user
+                is_modified = check_file_modified(
+                    manifest, runtime, manifest_key, dest_file
+                )
+
+                if is_modified and not force and not backup:
+                    # Skip modified files unless --force or --backup
+                    if dry_run:
+                        result.would_skip.append(manifest_key)
+                    else:
+                        result.skipped.append(manifest_key)
+                    continue
+
+                if dry_run:
+                    result.would_install.append(manifest_key)
+                    continue
+
+                # Create backup if requested and file was modified
+                if backup and is_modified and dest_file.exists():
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    backup_file = dest_file.with_suffix(f".backup.{timestamp}.md")
+                    shutil.copy2(dest_file, backup_file)
+                    result.backed_up.append(str(backup_file))
+
+                # Create install directory and copy file
+                install_path.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source_file, dest_file)
+
+                # Update manifest
+                source_hash = hash_file(source_file)
+                installed_hash = hash_file(dest_file)
+                set_installed_entry(
+                    manifest, runtime, manifest_key, source_hash, installed_hash
+                )
+
+                result.installed.append(manifest_key)
+
+    # Save manifest if we made changes
+    if not dry_run and result.installed:
+        save_manifest(manifest)
+
+    return result
