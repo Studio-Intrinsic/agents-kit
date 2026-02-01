@@ -58,8 +58,16 @@ def render(runtime: tuple[str, ...]):
 
 @cli.command()
 @click.option("--runtime", "-r", multiple=True, help="Target runtime(s)")
-def install(runtime: tuple[str, ...]):
-    """Render and install skills to configured runtimes."""
+@click.option("--force", "-f", is_flag=True, help="Overwrite modified files")
+@click.option("--backup", "-b", is_flag=True, help="Backup modified files before overwriting")
+@click.option("--dry-run", "-n", is_flag=True, help="Show what would be installed without making changes")
+def install(runtime: tuple[str, ...], force: bool, backup: bool, dry_run: bool):
+    """Render and install skills to configured runtimes.
+
+    By default, files that have been modified locally are skipped to preserve
+    your changes. Use --force to overwrite them, or --backup to save a copy
+    before overwriting.
+    """
     from agents.adapters import install_to_runtime, load_adapter, render_all_skills
 
     config = load_config()
@@ -69,6 +77,9 @@ def install(runtime: tuple[str, ...]):
     if not runtimes:
         console.print("[red]No runtimes configured.[/red]")
         raise SystemExit(1)
+
+    if dry_run:
+        console.print("[cyan]Dry run mode - no changes will be made[/cyan]\n")
 
     console.print("Rendering skills...")
     for rt in runtimes:
@@ -82,17 +93,39 @@ def install(runtime: tuple[str, ...]):
         console.print(f"  [green]{rt}[/green]: {rendered} skills rendered")
 
     console.print("\nInstalling to runtimes...")
+    total_skipped = 0
+
     for rt in runtimes:
         try:
             adapter = load_adapter(rt)
         except FileNotFoundError:
             continue
 
-        installed = install_to_runtime(adapter)
+        result = install_to_runtime(adapter, force=force, backup=backup, dry_run=dry_run)
         install_path = adapter.get("install_path", "unknown")
-        console.print(f"  [green]{rt}[/green]: {installed} skills -> {install_path}")
 
-    console.print("[green]Done![/green]")
+        if dry_run:
+            console.print(f"  [cyan]{rt}[/cyan]: would install {len(result.would_install)} files -> {install_path}")
+            if result.would_skip:
+                console.print(f"    [yellow]would skip {len(result.would_skip)} modified files[/yellow]")
+        else:
+            console.print(f"  [green]{rt}[/green]: {result.total_installed} files -> {install_path}")
+
+            if result.backed_up:
+                console.print(f"    [blue]backed up {len(result.backed_up)} files[/blue]")
+
+            if result.skipped:
+                console.print(f"    [yellow]skipped {len(result.skipped)} modified files[/yellow]")
+                total_skipped += len(result.skipped)
+
+    if dry_run:
+        console.print("\n[cyan]Dry run complete. No files were changed.[/cyan]")
+    elif total_skipped > 0:
+        console.print(f"\n[yellow]{total_skipped} files skipped (locally modified).[/yellow]")
+        console.print("[dim]Use --force to overwrite, or --backup to save changes first.[/dim]")
+        console.print("[green]Done![/green]")
+    else:
+        console.print("[green]Done![/green]")
 
 
 @cli.command()
@@ -212,8 +245,14 @@ def doctor():
 
 
 @cli.command()
-def update():
-    """Pull latest changes and reinstall."""
+@click.option("--force", "-f", is_flag=True, help="Overwrite modified files")
+@click.option("--backup", "-b", is_flag=True, help="Backup modified files before overwriting")
+def update(force: bool, backup: bool):
+    """Pull latest changes and reinstall.
+
+    By default, locally modified files are preserved. Use --force to overwrite
+    or --backup to save a copy before overwriting.
+    """
     root = find_agents_root()
     if not root:
         console.print("[red]No .agents directory found.[/red]")
@@ -239,7 +278,7 @@ def update():
     # Run install
     console.print("\nReinstalling...")
     ctx = click.get_current_context()
-    ctx.invoke(install)
+    ctx.invoke(install, force=force, backup=backup)
 
 
 @cli.command("new-skill")
